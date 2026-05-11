@@ -13,14 +13,14 @@ async function handleMessage(msg) {
   if (text === "/start") {
     return sendMessage(
       chatId,
-      `👋 *Hola\\! Soy tu bot de gastos.*\n\nMandame tus gastos así:\n\n` +
-        `• \`uber 2500\`\n` +
-        `• \`café 850 pesos\`\n` +
-        `• \`netflix 15 usd\`\n` +
-        `• \`supermercado 12000\`\n\n` +
+      `👋 <b>Hola! Soy tu bot de gastos.</b>\n\nMandame tus gastos así:\n\n` +
+        `• <code>uber 2500</code>\n` +
+        `• <code>café 850 pesos</code>\n` +
+        `• <code>netflix 15 usd</code>\n` +
+        `• <code>supermercado 12000</code>\n\n` +
         `También podés preguntarme:\n` +
-        `• _¿cuánto gasté este mes?_\n` +
-        `• _¿en qué categoría gasté más?_\n\n` +
+        `• <i>¿cuánto gasté este mes?</i>\n` +
+        `• <i>¿en qué categoría gasté más?</i>\n\n` +
         `Comandos:\n` +
         `/resumen — ver resumen del mes\n` +
         `/ultimos — últimos 5 gastos\n` +
@@ -42,7 +42,6 @@ async function handleMessage(msg) {
 
   // --- Parse with Claude ---
   try {
-    await sendMessage(chatId, "⏳ Procesando...");
     const parsed = await parseExpense(text);
 
     if (parsed.type === "expense") {
@@ -52,12 +51,12 @@ async function handleMessage(msg) {
 
       return sendMessage(
         chatId,
-        `${emoji} *${saved.category}*\n` +
+        `${emoji} <b>${saved.category}</b>\n` +
           `💰 ${amountStr}\n` +
           (saved.merchant ? `🏪 ${saved.merchant}\n` : "") +
           (saved.description ? `📝 ${saved.description}\n` : "") +
           `📅 ${saved.date}\n\n` +
-          `_Guardado ✓ — mandá /borrar si fue un error_`
+          `<i>Guardado ✓ — mandá /borrar si fue un error</i>`
       );
     }
 
@@ -67,10 +66,9 @@ async function handleMessage(msg) {
       return sendMessage(chatId, answer);
     }
 
-    // unknown
     return sendMessage(
       chatId,
-      `🤔 No entendí ese gasto. Probá con algo como:\n\`uber 2500\` o \`café 850 pesos\``
+      `🤔 No entendí ese gasto. Probá con algo como:\n<code>uber 2500</code> o <code>café 850 pesos</code>`
     );
   } catch (err) {
     console.error("handleMessage error:", err);
@@ -99,7 +97,7 @@ async function handleResumen(chatId, userId) {
         const parts = [];
         if (totals.ARS) parts.push(`$${totals.ARS.toLocaleString("es-AR")}`);
         if (totals.USD) parts.push(`USD ${totals.USD}`);
-        return `${emoji} *${cat}*: ${parts.join(" + ")}`;
+        return `${emoji} <b>${cat}</b>: ${parts.join(" + ")}`;
       })
       .join("\n");
 
@@ -114,10 +112,10 @@ async function handleResumen(chatId, userId) {
 
     return sendMessage(
       chatId,
-      `📊 *Resumen de ${month}*\n\n${lines}\n\n` +
+      `📊 <b>Resumen de ${month}</b>\n\n${lines}\n\n` +
         `─────────────────\n` +
-        (totalARS ? `💵 Total ARS: *$${totalARS.toLocaleString("es-AR")}*\n` : "") +
-        (totalUSD ? `💵 Total USD: *$${totalUSD}*\n` : "") +
+        (totalARS ? `💵 Total ARS: <b>$${totalARS.toLocaleString("es-AR")}</b>\n` : "") +
+        (totalUSD ? `💵 Total USD: <b>$${totalUSD}</b>\n` : "") +
         `📦 Transacciones: ${expenses.length}`
     );
   } catch (err) {
@@ -138,11 +136,11 @@ async function handleUltimos(chatId, userId) {
         const emoji = categoryEmoji(e.category);
         const amount = formatAmount(e.amount, e.currency);
         const merchant = e.merchant ? ` — ${e.merchant}` : "";
-        return `${emoji} ${amount}${merchant} _(${e.date})_`;
+        return `${emoji} ${amount}${merchant} <i>(${e.date})</i>`;
       })
       .join("\n");
 
-    return sendMessage(chatId, `🕐 *Últimos gastos*\n\n${lines}`);
+    return sendMessage(chatId, `🕐 <b>Últimos gastos</b>\n\n${lines}`);
   } catch (err) {
     console.error("handleUltimos error:", err);
     return sendMessage(chatId, "❌ No pude cargar los gastos.");

@@ -25,16 +25,16 @@ Currency rules:
 - If no currency is mentioned, default to ARS
 
 Date rules:
-- If no date is mentioned, use today's date
+- If no date is mentioned, use today's date (provided in the user message)
 - "ayer" = yesterday, "anteayer" = two days ago
 
 If the message is a question about spending (e.g. "cuánto gasté?", "how much on food?"), set type to "query" and all other fields to null.
 If you cannot parse it as an expense or query, set type to "unknown".
 
 Examples:
-"uber 2500" → { "type": "expense", "amount": 2500, "currency": "ARS", "merchant": "Uber", "category": "Transport", "description": "Uber ride", "date": "2026-05-11" }
-"netflix 15 usd" → { "type": "expense", "amount": 15, "currency": "USD", "merchant": "Netflix", "category": "Subscriptions", "description": "Netflix subscription", "date": "2026-05-11" }
-"café con medialunas 850" → { "type": "expense", "amount": 850, "currency": "ARS", "merchant": null, "category": "Food & Coffee", "description": "Café con medialunas", "date": "2026-05-11" }
+"uber 2500" → { "type": "expense", "amount": 2500, "currency": "ARS", "merchant": "Uber", "category": "Transport", "description": "Uber ride", "date": "<today>" }
+"netflix 15 usd" → { "type": "expense", "amount": 15, "currency": "USD", "merchant": "Netflix", "category": "Subscriptions", "description": "Netflix subscription", "date": "<today>" }
+"café con medialunas 850" → { "type": "expense", "amount": 850, "currency": "ARS", "merchant": null, "category": "Food & Coffee", "description": "Café con medialunas", "date": "<today>" }
 "cuánto gasté este mes?" → { "type": "query", "amount": null, "currency": null, "merchant": null, "category": null, "description": null, "date": null }
 `;
 
@@ -42,10 +42,22 @@ async function parseExpense(userMessage) {
   const today = new Date().toISOString().split("T")[0];
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-haiku-4-5-20251001", // haiku: faster + cheaper for structured parsing
     max_tokens: 500,
-    system: SYSTEM_PROMPT.replace("2026-05-11", today), // inject real today
-    messages: [{ role: "user", content: userMessage }],
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" }, // cache the static system prompt
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        // inject today's date in the message, not by mangling the system prompt
+        content: `Today is ${today}.\n\n${userMessage}`,
+      },
+    ],
   });
 
   const raw = response.content[0].text.trim();
@@ -60,17 +72,26 @@ async function parseExpense(userMessage) {
 
 async function answerQuery(userMessage, expenses) {
   const summary = buildSummaryContext(expenses);
+  const today = new Date().toISOString().split("T")[0];
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6", // sonnet for richer natural language answers
     max_tokens: 800,
-    system: `Eres un asistente financiero personal. El usuario te hará preguntas sobre sus gastos.
+    system: [
+      {
+        type: "text",
+        text: `Eres un asistente financiero personal. El usuario te hará preguntas sobre sus gastos.
 Responde siempre en el mismo idioma que el usuario (español o inglés).
-Sé conciso, amigable, y usa emojis con moderación.
-Aquí están los gastos del usuario este mes:
-
-${summary}`,
-    messages: [{ role: "user", content: userMessage }],
+Sé conciso, amigable, y usa emojis con moderación.`,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: `Hoy es ${today}. Aquí están mis gastos de este mes:\n\n${summary}\n\n${userMessage}`,
+      },
+    ],
   });
 
   return response.content[0].text;

@@ -2,11 +2,13 @@ const axios = require("axios");
 
 const BASE_URL = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}`;
 
+// HTML parse_mode is more predictable than Markdown — no escaping surprises
+// with special chars like !, -, (, ) that break MarkdownV2
 async function sendMessage(chatId, text, options = {}) {
   await axios.post(`${BASE_URL}/sendMessage`, {
     chat_id: chatId,
     text,
-    parse_mode: "Markdown",
+    parse_mode: "HTML",
     ...options,
   });
 }

@@ -5,7 +5,11 @@
       "Bash(git add *)",
       "Bash(git commit *)",
       "Bash(git remote *)",
-      "Bash(git branch *)"
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(cp /Users/santiagozalazar/Downloads/gastos-bot/src-v2/* /Users/santiagozalazar/Downloads/gastos-bot/src/)",
+      "Bash(rm -rf /Users/santiagozalazar/Downloads/gastos-bot/src-v2)",
+      "Bash(rm -rf \"/Users/santiagozalazar/Downloads/gastos-bot/{src,prisma}\")"
     ]
   }
 }

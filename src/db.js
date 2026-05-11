@@ -41,12 +41,25 @@ async function getExpensesThisMonth(telegramUserId) {
   return data;
 }
 
+async function getExpensesByDateRange(telegramUserId, from, to) {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("*")
+    .eq("telegram_user_id", String(telegramUserId))
+    .gte("date", from)
+    .lte("date", to)
+    .order("date", { ascending: false });
+
+  if (error) throw error;
+  return data;
+}
+
 async function getRecentExpenses(telegramUserId, limit = 5) {
   const { data, error } = await supabase
     .from("expenses")
     .select("*")
     .eq("telegram_user_id", String(telegramUserId))
-      .order("created_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
@@ -54,7 +67,6 @@ async function getRecentExpenses(telegramUserId, limit = 5) {
 }
 
 async function deleteLastExpense(telegramUserId) {
-  // get the most recent one
   const { data: rows, error: fetchError } = await supabase
     .from("expenses")
     .select("id")
@@ -77,6 +89,7 @@ async function deleteLastExpense(telegramUserId) {
 module.exports = {
   saveExpense,
   getExpensesThisMonth,
+  getExpensesByDateRange,
   getRecentExpenses,
   deleteLastExpense,
 };
