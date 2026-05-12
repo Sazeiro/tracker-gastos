@@ -25,16 +25,16 @@ Currency rules:
 - If no currency is mentioned, default to ARS
 
 Date rules:
-- If no date is mentioned, use today's date (provided in the user message)
+- If no date is mentioned, use today's date
 - "ayer" = yesterday, "anteayer" = two days ago
 
 If the message is a question about spending (e.g. "cuánto gasté?", "how much on food?"), set type to "query" and all other fields to null.
 If you cannot parse it as an expense or query, set type to "unknown".
 
 Examples:
-"uber 2500" → { "type": "expense", "amount": 2500, "currency": "ARS", "merchant": "Uber", "category": "Transport", "description": "Uber ride", "date": "<today>" }
-"netflix 15 usd" → { "type": "expense", "amount": 15, "currency": "USD", "merchant": "Netflix", "category": "Subscriptions", "description": "Netflix subscription", "date": "<today>" }
-"café con medialunas 850" → { "type": "expense", "amount": 850, "currency": "ARS", "merchant": null, "category": "Food & Coffee", "description": "Café con medialunas", "date": "<today>" }
+"uber 2500" → { "type": "expense", "amount": 2500, "currency": "ARS", "merchant": "Uber", "category": "Transport", "description": "Uber ride", "date": "TODAY" }
+"netflix 15 usd" → { "type": "expense", "amount": 15, "currency": "USD", "merchant": "Netflix", "category": "Subscriptions", "description": "Netflix subscription", "date": "TODAY" }
+"café con medialunas 850" → { "type": "expense", "amount": 850, "currency": "ARS", "merchant": null, "category": "Food & Coffee", "description": "Café con medialunas", "date": "TODAY" }
 "cuánto gasté este mes?" → { "type": "query", "amount": null, "currency": null, "merchant": null, "category": null, "description": null, "date": null }
 `;
 
@@ -42,22 +42,10 @@ async function parseExpense(userMessage) {
   const today = new Date().toISOString().split("T")[0];
 
   const response = await client.messages.create({
-    model: "claude-haiku-4-5-20251001", // haiku: faster + cheaper for structured parsing
+    model: "claude-sonnet-4-20250514",
     max_tokens: 500,
-    system: [
-      {
-        type: "text",
-        text: SYSTEM_PROMPT,
-        cache_control: { type: "ephemeral" }, // cache the static system prompt
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        // inject today's date in the message, not by mangling the system prompt
-        content: `Today is ${today}.\n\n${userMessage}`,
-      },
-    ],
+    system: SYSTEM_PROMPT.replace(/TODAY/g, today),
+    messages: [{ role: "user", content: userMessage }],
   });
 
   const raw = response.content[0].text.trim();
@@ -71,54 +59,80 @@ async function parseExpense(userMessage) {
 }
 
 async function answerQuery(userMessage, expenses) {
-  const summary = buildSummaryContext(expenses);
-  const today = new Date().toISOString().split("T")[0];
+  const context = buildRichContext(expenses);
+  const today = new Date().toLocaleDateString("es-AR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-6", // sonnet for richer natural language answers
-    max_tokens: 800,
-    system: [
-      {
-        type: "text",
-        text: `Eres un asistente financiero personal. El usuario te hará preguntas sobre sus gastos.
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1000,
+    system: `Eres un asistente financiero personal. El usuario te hará preguntas sobre sus gastos del historial que se provee abajo.
 Responde siempre en el mismo idioma que el usuario (español o inglés).
-Sé conciso, amigable, y usa emojis con moderación.`,
-        cache_control: { type: "ephemeral" },
-      },
-    ],
-    messages: [
-      {
-        role: "user",
-        content: `Hoy es ${today}. Aquí están mis gastos de este mes:\n\n${summary}\n\n${userMessage}`,
-      },
-    ],
+Sé conciso, directo y amigable. Usá emojis con moderación.
+Si hay datos suficientes, mencioná tendencias o insights útiles (ej: "gastaste 20% más en comida que el mes pasado").
+Si te preguntan algo que no podés responder con los datos disponibles, decilo claramente.
+Hoy es ${today}.
+
+=== HISTORIAL DE GASTOS ===
+${context}`,
+    messages: [{ role: "user", content: userMessage }],
   });
 
   return response.content[0].text;
 }
 
-function buildSummaryContext(expenses) {
-  if (!expenses || expenses.length === 0) return "No hay gastos registrados aún.";
+function buildRichContext(expenses) {
+  if (!expenses || expenses.length === 0) return "No hay gastos registrados.";
 
-  const byCategory = expenses.reduce((acc, e) => {
-    const key = `${e.category} (${e.currency})`;
-    acc[key] = (acc[key] || 0) + e.amount;
-    return acc;
-  }, {});
+  const byMonth = {};
+  for (const e of expenses) {
+    const month = e.date.slice(0, 7);
+    if (!byMonth[month]) byMonth[month] = [];
+    byMonth[month].push(e);
+  }
 
-  const lines = Object.entries(byCategory)
-    .map(([cat, total]) => `- ${cat}: ${total.toLocaleString()}`)
-    .join("\n");
+  const sections = Object.entries(byMonth)
+    .sort(([a], [b]) => b.localeCompare(a))
+    .map(([month, exps]) => {
+      const label = new Date(`${month}-01`).toLocaleString("es-AR", {
+        month: "long",
+        year: "numeric",
+      });
 
-  const total_ars = expenses
-    .filter((e) => e.currency === "ARS")
-    .reduce((s, e) => s + e.amount, 0);
+      const catTotals = {};
+      for (const e of exps) {
+        const key = `${e.category} (${e.currency})`;
+        catTotals[key] = (catTotals[key] || 0) + Number(e.amount);
+      }
+      const catLines = Object.entries(catTotals)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, total]) => `    ${cat}: ${total.toLocaleString("es-AR")}`)
+        .join("\n");
 
-  const total_usd = expenses
-    .filter((e) => e.currency === "USD")
-    .reduce((s, e) => s + e.amount, 0);
+      const txLines = exps
+        .slice(0, 30)
+        .map((e) => {
+          const merchant = e.merchant ? ` @ ${e.merchant}` : "";
+          const desc = e.description ? ` (${e.description})` : "";
+          return `    ${e.date} | ${e.category}${merchant}${desc} | ${e.currency} ${Number(e.amount).toLocaleString("es-AR")}`;
+        })
+        .join("\n");
 
-  return `Por categoría:\n${lines}\n\nTotal ARS: ${total_ars.toLocaleString()}\nTotal USD: ${total_usd.toLocaleString()}`;
+      const totalARS = exps.filter((e) => e.currency === "ARS").reduce((s, e) => s + Number(e.amount), 0);
+      const totalUSD = exps.filter((e) => e.currency === "USD").reduce((s, e) => s + Number(e.amount), 0);
+      const totalsLine = [
+        totalARS ? `ARS ${totalARS.toLocaleString("es-AR")}` : null,
+        totalUSD ? `USD ${totalUSD}` : null,
+      ].filter(Boolean).join(" + ");
+
+      return `--- ${label.toUpperCase()} (total: ${totalsLine}) ---\nPor categoría:\n${catLines}\n\nTransacciones:\n${txLines}`;
+    });
+
+  return sections.join("\n\n");
 }
 
 module.exports = { parseExpense, answerQuery };

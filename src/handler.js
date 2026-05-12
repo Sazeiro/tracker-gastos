@@ -1,5 +1,5 @@
 const { parseExpense, answerQuery } = require("./claude");
-const { saveExpense, getExpensesThisMonth, getRecentExpenses, deleteLastExpense } = require("./db");
+const { saveExpense, getExpensesThisMonth, getExpensesLastNMonths, getRecentExpenses, deleteLastExpense } = require("./db");
 const { sendMessage } = require("./telegram");
 
 async function handleMessage(msg) {
@@ -61,7 +61,7 @@ async function handleMessage(msg) {
     }
 
     if (parsed.type === "query") {
-      const expenses = await getExpensesThisMonth(userId);
+      const expenses = await getExpensesLastNMonths(userId, 3);
       const answer = await answerQuery(text, expenses);
       return sendMessage(chatId, answer);
     }
