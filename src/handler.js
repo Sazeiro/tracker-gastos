@@ -1,13 +1,29 @@
 const { parseExpense, answerQuery } = require("./claude");
 const { saveExpense, getExpensesThisMonth, getExpensesLastNMonths, getRecentExpenses, deleteLastExpense } = require("./db");
 const { sendMessage } = require("./telegram");
+const { transcribeAudio } = require("./whisper");
 
 async function handleMessage(msg) {
   const chatId = msg.chat.id;
   const userId = msg.from.id;
-  const text = msg.text?.trim();
 
+  // Handle voice messages
+  if (msg.voice || msg.audio) {
+    const fileId = msg.voice ? msg.voice.file_id : msg.audio.file_id;
+    try {
+      await sendMessage(chatId, "🎤 Transcribiendo audio...");
+      const transcribed = await transcribeAudio(fileId);
+      await sendMessage(chatId, `_Escuché: "${transcribed}"_`);
+      msg.text = transcribed;
+    } catch (err) {
+      console.error("Audio transcription error:", err);
+      return sendMessage(chatId, "❌ No pude transcribir el audio. Intentá de nuevo.");
+    }
+  }
+
+  const text = msg.text?.trim();
   if (!text) return;
+
 
   // --- Commands ---
   if (text === "/start") {
